@@ -1,45 +1,129 @@
-Choose ONE of the following tasks.
-Please do not invest more than 2-4 hours on this.
-Upload your results to a Github repo, for easier sharing and reviewing.
+Refactored Code
 
-Thank you and good luck!
+My Thoughts
+The code seems to be OK. Repository design pattern is used, but this is not fitting design pattern for Laravel. Repositories is sometimes used for Laravel applications, but rather an outlier, than a common sight. Moving the logic into Models and Service classes is better choice. Repositories are not the right place for putting business logic.
+  
+The following function from app/Repository/BookingRepository.php are refactored.
 
+Original Code
+public function getUsersJobs($user_id)
+{
+	$cuser = User::find($user_id);
+        $usertype = '';
+        $emergencyJobs = array();
+        $noramlJobs = array();
+        if ($cuser && $cuser->is('customer')) {
+            $jobs = $cuser->jobs()->with('user.userMeta', 'user.average', 'translatorJobRel.user.average', 'language', 'feedback')->whereIn('status', ['pending', 'assigned', 'started'])->orderBy('due', 'asc')->get();
+            $usertype = 'customer';
+        } elseif ($cuser && $cuser->is('translator')) {
+            $jobs = Job::getTranslatorJobs($cuser->id, 'new');
+            $jobs = $jobs->pluck('jobs')->all();
+            $usertype = 'translator';
+        }
+        if ($jobs) {
+            foreach ($jobs as $jobitem) {
+                if ($jobitem->immediate == 'yes') {
+                    $emergencyJobs[] = $jobitem;
+                } else {
+                    $noramlJobs[] = $jobitem;
+                }
+            }
+            $noramlJobs = collect($noramlJobs)->each(function ($item, $key) use ($user_id) {
+                $item['usercheck'] = Job::checkParticularJob($user_id, $item);
+            })->sortBy('due')->all();
+        }
 
+        return ['emergencyJobs' => $emergencyJobs, 'noramlJobs' => $noramlJobs, 'cuser' => $cuser, 'usertype' => $usertype];
+}
 
-Code to refactor
-=================
-1) app/Http/Controllers/BookingController.php
-2) app/Repository/BookingRepository.php
+----------------------------------------------------------------------------------------------------------
 
-Code to write tests
-=====================
-3) App/Helpers/TeHelper.php method willExpireAt
-4) App/Repository/UserRepository.php, method createOrUpdate
+Refactored Code
+public function getUsersJobs($user_id)
+{
+     	$cuser = User::find($user_id);
+	if(!isset($cuser) || empty($cuser)) {
+		abort(404);
+	}
+		
+	$emergencyJobs = [];
+	$noramlJobs = [];
+					
+	$usertype = $this->getUserType($cuser);
+	$jobs = $this->getJobs($cuser);
+		
+	if($jobs) {
+		foreach ($jobs as $jobitem) 
+		{
+                	if ($jobitem->immediate == 'yes') {
+                    		$emergencyJobs[] = $jobitem;
+                	} else {
+                    		$noramlJobs[] = $jobitem;
+                	}
+            	}
+			
+		if(!empty($noramlJobs)) {
+			$newNormalJobs = $this->getNormalJobsCollection($noramlJobs, $user_id);
+		}
+	}
+		
+	return ['emergencyJobs' => $emergencyJobs, 'noramlJobs' => $newNoramlJobs, 'cuser' => $cuser, 'usertype' => $usertype];
+				
+}
 
+public function getUserType($cuser)
+{
+	if ($cuser->is('customer')) 
+	{							
+            $usertype = 'customer';
+	} elseif ($cuser->is('translator')) {
+	    $usertype = 'translator';
+	} else {
+	    $usertype = "";
+	}
+		
+	return $usertype;
+}
+	
+public function getJobs($cuser)
+{
+	if ($cuser->is('customer')) 
+	{
+            $jobs = $cuser->jobs()
+			->with([
+				'user.userMeta', 
+				'user.average', 
+				'translatorJobRel.user.average', 
+				'language', 
+				'feedback'
+			])
+			->whereIn('status', ['pending', 'assigned', 'started'])
+			->orderBy('due', 'asc')
+			->get();
+							
+	} elseif($cuser->is('translator')) {
+			
+		$jobs = Job::getTranslatorJobs($cuser->id, 'new');
+            	$jobs = $jobs->pluck('jobs')->all();
+			
+	} else {
+			
+		$jobs = NULL;
+	}
+		
+	return $jobs;
+}
 
-----------------------------
+public function getNormalJobsCollection($noramlJobs)
+{
+	$noramlJobs = collect($noramlJobs)->each(function ($item, $key) use ($user_id) {
+				$item['usercheck'] = Job::checkParticularJob($user_id, $item);
+			})->sortBy('due')->all();
+		
+	return $normalJobs;
+}
 
-What I expect in your repo:
-
-X. A readme with:   Your thoughts about the code. What makes it amazing code. Or what makes it ok code. Or what makes it terrible code. How would you have done it. Thoughts on formatting, structure, logic.. The more details that you can provide about the code (what's terrible about it or/and what is good about it) the easier for us to assess your coding style, mentality etc
-
-And 
-
-Y.  Refactor it if you feel it needs refactoring. The more love you put into it. The easier for us to asses your thoughts, code principles etc
-
-
-IMPORTANT: Make two commits. First commit with original code. Second with your refactor so we can easily trace changes. 
-
-
-NB: you do not need to set up the code on local and make the web app run. It will not run as its not a complete web app. This is purely to assess you thoughts about code, formatting, logic etc
-
-
-===== So expected output is a GitHub link with either =====
-
-1. Readme described above (point X above) + refactored code 
-OR
-2. Readme described above (point X above) + a unit test of the code that we have sent
-
-Thank you!
-
+----------------------------------------------------------------------------------------------------
+Thanks,
+Yasir
 
